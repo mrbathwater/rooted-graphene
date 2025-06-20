@@ -1,0 +1,43 @@
+name: Build Bluejay OTA
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      matrix:
+        device: [ bluejay ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # Cache AOSP and build artifacts for speed
+    - uses: actions/cache@v4
+      with:
+        key: ${{ runner.os }}-aosp-${{ hashFiles('scripts/**') }}
+        path: |
+          ~/.cache/aosp
+          ~/.cache/ccache
+
+    - name: Sync sources
+      run: bash ./scripts/0_sync_sources.sh ${{ matrix.device }}
+
+    - name: Build GrapheneOS (userland & patches)
+      run: bash ./scripts/1_build_graphene.sh ${{ matrix.device }}
+
+    - name: Build Kernel (KernelSU + SUSFS)
+      run: bash ./scripts/2_build_kernel.sh ${{ matrix.device }}
+
+    - name: Add Magisk + SUSFS module
+      run: bash ./scripts/3_add_magisk.sh ${{ matrix.device }}
+
+    - name: Upload OTA
+      uses: actions/upload-artifact@v4
+      with:
+        name: bluejay-ota
+        path: out/${{ matrix.device }}/bluejay-ota_update-*.zip
+        retention-days: 7
